@@ -131,4 +131,3 @@ print <<EOF;
 .Sh SEE ALSO
 .Xr TSAPI 3ts
 EOF
-# vim: set ts=2 sw=2 et :
