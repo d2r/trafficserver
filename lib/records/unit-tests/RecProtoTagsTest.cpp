@@ -102,5 +102,11 @@ SCENARIO("RecNormalizeProtoTag returns static pointers to the matching string")
         REQUIRE(RecNormalizeProtoTag(std::string("h2").c_str()) == IP_PROTO_TAG_HTTP_2_0.ptr());
       }
     }
+    WHEN("stack-allocated pointer for a bogus string is normalized") {
+      THEN("null is returned") {
+        std::string arbitraryString = "a8e9b0d9-28ce-4b78-882f-5d813d882f4d";
+        REQUIRE(RecNormalizeProtoTag(arbitraryString.c_str()) == nullptr);
+      }
+    }
   }
 }
