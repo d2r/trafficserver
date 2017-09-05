@@ -50,26 +50,30 @@ const char *const TS_PROTO_TAG_IPV4     = IP_PROTO_TAG_IPV4.ptr();
 const char *const TS_PROTO_TAG_IPV6     = IP_PROTO_TAG_IPV6.ptr();
 
 struct tag_pred {
-    bool operator()(char const* x, char const* y) const {
-        return strncmp(x, y, strlen(x)) == 0;
-    }
+  bool
+  operator()(char const *x, char const *y) const
+  {
+    return strncmp(x, y, strlen(x)) == 0;
+  }
 };
 
 struct tag_hash {
-    size_t operator()(char const* x) const {
-        size_t h = 0;
-        while (*x) {
-            h = h * 27 + (unsigned char)*x++;
-        }
-        return h;
+  size_t
+  operator()(char const *x) const
+  {
+    size_t h = 0;
+    while (*x) {
+      h = h * 27 + (unsigned char)*x++;
     }
+    return h;
+  }
 };
 
-typedef std::unordered_set<char const*, tag_hash, tag_pred> TSProtoTagsMap;
+typedef std::unordered_set<char const *, tag_hash, tag_pred> TSProtoTagsMap;
 static TSProtoTagsMap TSProtoTags = TSProtoTagsMap();
 
 void ts_session_protocol_well_known_name_tags_init();
 
-const char * RecNormalizeProtoTag(const char *tag);
+const char *RecNormalizeProtoTag(const char *tag);
 
 #endif

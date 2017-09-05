@@ -27,8 +27,15 @@
 extern "C" {
 #endif /* __cplusplus */
 
-void *ats_malloc(size_t size) { return nullptr; }
-void ats_free(void *ptr) { /* Do nothing */ }
+void *
+ats_malloc(size_t size)
+{
+  return nullptr;
+}
+void
+ats_free(void *ptr)
+{ /* Do nothing */
+}
 
 #ifdef __cplusplus
 }
