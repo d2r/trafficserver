@@ -1,0 +1,81 @@
+=================================================================
+==26240==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7fe513de70e0 at pc 0x7fe51b963658 bp 0x7fe513de6a00 sp 0x7fe513de69f8
+WRITE of size 1 at 0x7fe513de70e0 thread T9 ([ET_NET 7])
+    #0 0x7fe51b963657 in Diags::print_va(char const*, DiagsLevel, SourceLocation const*, char const*, __va_list_tag*) const /Users/derekd/devel/trafficserver/lib/ts/Diags.cc:299
+    #1 0x7fe51b964a5f in Diags::error_va(DiagsLevel, SourceLocation const*, char const*, __va_list_tag*) const /Users/derekd/devel/trafficserver/lib/ts/Diags.cc:559
+    #2 0x5e12b2 in Diags::error(DiagsLevel, SourceLocation const*, char const*, ...) const ../../lib/ts/Diags.h:208
+    #3 0x7cba36 in HttpSM::update_stats() /Users/derekd/devel/trafficserver/proxy/http/HttpSM.cc:6951
+    #4 0x7c972c in HttpSM::kill_this() /Users/derekd/devel/trafficserver/proxy/http/HttpSM.cc:6784
+    #5 0x7a24c6 in HttpSM::main_handler(int, void*) /Users/derekd/devel/trafficserver/proxy/http/HttpSM.cc:2589
+    #6 0x60eb54 in Continuation::handleEvent(int, void*) /Users/derekd/devel/trafficserver/iocore/eventsystem/I_Continuation.h:153
+    #7 0x874fcd in HttpTunnel::main_handler(int, void*) /Users/derekd/devel/trafficserver/proxy/http/HttpTunnel.cc:1625
+    #8 0x60eb54 in Continuation::handleEvent(int, void*) /Users/derekd/devel/trafficserver/iocore/eventsystem/I_Continuation.h:153
+    #9 0xaedbf6 in write_signal_and_update /Users/derekd/devel/trafficserver/iocore/net/UnixNetVConnection.cc:114
+    #10 0xaee047 in write_signal_done /Users/derekd/devel/trafficserver/iocore/net/UnixNetVConnection.cc:156
+    #11 0xaf000b in write_to_net_io(NetHandler*, UnixNetVConnection*, EThread*) /Users/derekd/devel/trafficserver/iocore/net/UnixNetVConnection.cc:507
+    #12 0xaef34a in write_to_net(NetHandler*, UnixNetVConnection*, EThread*) /Users/derekd/devel/trafficserver/iocore/net/UnixNetVConnection.cc:359
+    #13 0xad8db9 in NetHandler::process_ready_list() /Users/derekd/devel/trafficserver/iocore/net/UnixNet.cc:409
+    #14 0xad9ea3 in NetHandler::waitForActivity(long) /Users/derekd/devel/trafficserver/iocore/net/UnixNet.cc:524
+    #15 0xb46c98 in EThread::execute_regular() /Users/derekd/devel/trafficserver/iocore/eventsystem/UnixEThread.cc:271
+    #16 0xb47300 in EThread::execute() /Users/derekd/devel/trafficserver/iocore/eventsystem/UnixEThread.cc:324
+    #17 0xb442da in spawn_thread_internal /Users/derekd/devel/trafficserver/iocore/eventsystem/Thread.cc:85
+    #18 0x7fe519fe5aa0 in start_thread (/lib64/libpthread.so.0+0x7aa0)
+    #19 0x7fe51938e93c in clone (/lib64/libc.so.6+0xe893c)
+
+Address 0x7fe513de70e0 is located in stack of thread T9 ([ET_NET 7]) at offset 1632 in frame
+    #0 0x7fe51b962dbd in Diags::print_va(char const*, DiagsLevel, SourceLocation const*, char const*, __va_list_tag*) const /Users/derekd/devel/trafficserver/lib/ts/Diags.cc:228
+
+  This frame has 8 object(s):
+    [32, 40) 'cur_clock'
+    [96, 112) 'tp'
+    [160, 184) 'tmp'
+    [224, 272) 'timestamp_buf'
+    [320, 576) 'buf'
+    [608, 1632) 'format_buf' <== Memory access at offset 1632 overflows this variable
+    [1664, 2688) 'format_buf_w_ts'
+    [2720, 4768) 'syslog_buffer'
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism or swapcontext
+      (longjmp and C++ exceptions *are* supported)
+Thread T9 ([ET_NET 7]) created by T0 ([TS_MAIN]) here:
+    #0 0x54f0c4 in __interceptor_pthread_create (/opt/trafficservertest/bin/traffic_server+0x54f0c4)
+    #1 0xb43d42 in ink_thread_create ../../lib/ts/ink_thread.h:156
+    #2 0xb44403 in Thread::start(char const*, void*, unsigned long, std::function<void ()> const&) /Users/derekd/devel/trafficserver/iocore/eventsystem/Thread.cc:102
+    #3 0xb4c9e1 in EventProcessor::spawn_event_threads(int, int, unsigned long) /Users/derekd/devel/trafficserver/iocore/eventsystem/UnixEventProcessor.cc:383
+    #4 0xb4d167 in EventProcessor::start(int, unsigned long) /Users/derekd/devel/trafficserver/iocore/eventsystem/UnixEventProcessor.cc:446
+    #5 0x6563d1 in main /Users/derekd/devel/trafficserver/proxy/Main.cc:1800
+    #6 0x7fe5192c4d5c in __libc_start_main (/lib64/libc.so.6+0x1ed5c)
+
+SUMMARY: AddressSanitizer: stack-buffer-overflow /Users/derekd/devel/trafficserver/lib/ts/Diags.cc:299 Diags::print_va(char const*, DiagsLevel, SourceLocation const*, char const*, __va_list_tag*) const
+Shadow bytes around the buggy address:
+  0x0ffd227b4dc0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ffd227b4dd0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ffd227b4de0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ffd227b4df0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ffd227b4e00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0ffd227b4e10: 00 00 00 00 00 00 00 00 00 00 00 00[f2]f2 f2 f2
+  0x0ffd227b4e20: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ffd227b4e30: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ffd227b4e40: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ffd227b4e50: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ffd227b4e60: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Heap right redzone:      fb
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack partial redzone:   f4
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+==26240==ABORTING
+☞  (1)
