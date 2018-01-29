@@ -230,6 +230,8 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
   const char *s;
   char *buffer, *d, timestamp_buf[48];
   char format_buf[1024], format_buf_w_ts[1024], *end_of_format;
+  const char * const format_buf_end = format_buf + sizeof(format_buf);
+  const char * const format_buf_w_ts_end = format_buf_w_ts + sizeof(format_buf_w_ts);
 
   ink_release_assert(diags_level < DiagsLevel_Count);
 
@@ -251,13 +253,13 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
   *end_of_format = NUL;
 
   // add the thread id
-  end_of_format += snprintf(end_of_format, sizeof(format_buf), "{0x%" PRIx64 "} ", (uint64_t)ink_thread_self());
+  end_of_format += snprintf(end_of_format, sizeof(format_buf) - 1, "{0x%" PRIx64 "} ", (uint64_t)ink_thread_self());
 
   //////////////////////////////////////
   // start with the diag level prefix //
   //////////////////////////////////////
 
-  for (s = level_name(diags_level); *s; *end_of_format++ = *s++) {
+  for (s = level_name(diags_level); *s && end_of_format < (format_buf_end - 2); *end_of_format++ = *s++) {
     ;
   }
 
@@ -271,9 +273,9 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
   if (location(loc, show_location, diags_level)) {
     char *lp, buf[256];
     lp = loc->str(buf, sizeof(buf));
-    if (lp) {
+    if (lp && end_of_format < format_buf_end) {
       *end_of_format++ = '<';
-      for (s = lp; *s; *end_of_format++ = *s++) {
+      for (s = lp; *s && end_of_format < (format_buf_end - 2); *end_of_format++ = *s++) {
         ;
       }
       *end_of_format++ = '>';
@@ -284,9 +286,9 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
   // append debugging tag //
   //////////////////////////
 
-  if (debug_tag) {
+  if (debug_tag && end_of_format < format_buf_end) { // XXX Is debug_tag always NUL-terminated?
     *end_of_format++ = '(';
-    for (s = debug_tag; *s; *end_of_format++ = *s++) {
+    for (s = debug_tag; *s && end_of_format < (format_buf_end - 2); *end_of_format++ = *s++) {
       ;
     }
     *end_of_format++ = ')';
@@ -295,9 +297,9 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
   //////////////////////////////////////////////////////
   // append original format string, and NUL terminate //
   //////////////////////////////////////////////////////
-
-  for (s = format_string; *s; *end_of_format++ = *s++) {
-    ;
+  const char *debug_c = nullptr;
+  for (s = format_string; *s && end_of_format < (format_buf_end - 1); *end_of_format++ = *s++) {
+    debug_c=s;
   }
   *end_of_format++ = NUL;
 
@@ -312,22 +314,29 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
   snprintf(&(timestamp_buf[19]), (sizeof(timestamp_buf) - 20), ".%03d", (int)(tp.tv_usec / 1000));
 
   d    = format_buf_w_ts;
-  *d++ = '[';
-
-  for (int i = 4; buffer[i]; i++) {
-    *d++ = buffer[i];
+  if (d < format_buf_w_ts_end) {
+    *d++ = '[';
   }
 
-  *d++ = ']';
-  *d++ = ' ';
+  if (buffer) {
+    int buffer_len = strlen(buffer);
+    for (int i = 4; i < buffer_len && buffer[i] && d < format_buf_w_ts_end; i++) {
+      *d++ = buffer[i];
+    }
+  }
 
-  for (int k = 0; prefix_str[k]; k++) {
+  if (d < (format_buf_w_ts_end -1)) {
+    *d++ = ']';
+    *d++ = ' ';
+  }
+
+  for (int k = 0; prefix_str[k] && d < (format_buf_w_ts_end - 1); k++) {
     *d++ = prefix_str[k];
   }
 
   *d++ = ' ';
 
-  for (s = format_buf; *s; *d++ = *s++) {
+  for (s = format_buf; *s && d < (format_buf_w_ts_end - 1); *d++ = *s++) {
     ;
   }
 
