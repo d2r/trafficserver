@@ -42,6 +42,7 @@
 #include "ts/ink_time.h"
 #include "ts/ink_hrtime.h"
 #include "ts/ink_thread.h"
+#include "ts/BufferWriter.h"
 #include "ts/Diags.h"
 
 int diags_on_for_plugins         = 0;
@@ -230,10 +231,9 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
   const char *s;
   char *buffer, *d, timestamp_buf[48];
   size_t BUF_CAPACITY = 1024;
-  char tmp[BUF_CAPACITY];
   char format_buf[BUF_CAPACITY], format_buf_w_ts[BUF_CAPACITY], *end_of_format;
-  FixedBufferWriter format_buf_writer(format_buf, BUF_CAPACITY);
-  FixedBufferWriter format_buf_w_ts_writer(format_buf_w_ts, BUF_CAPACITY);
+  LocalBufferWriter<BUF_CAPACITY> format_buf_writer;
+  LocalBufferWriter<BUF_CAPACITY> format_buf_w_ts_writer;
 
   ink_release_assert(diags_level < DiagsLevel_Count);
 
@@ -242,11 +242,17 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
   // format_buf contains <prefix_string>: (<debug_tag>) <format_string> //
   // and format_buf_w_ts has the same thing with a prepended timestamp. //
   ////////////////////////////////////////////////////////////////////////
+  
+  // Save space for the terminating NUL.
+  format_buf_writer.clip(BUF_CAPACITY - 1);
 
-  // add the thread id
-  int num_bytes_written = snprintf(tmp, sizeof(format_buf), "{0x%" PRIx64 "} ", (uint64_t)ink_thread_self());
-  if (num_bytes_written > 0) {
-    format_buf_writer.write(tmp, num_bytes_written);
+  {
+    // add the thread id
+    char tmp[BUF_CAPACITY];
+    int num_bytes_written = snprintf(tmp, format_buf_writer.capacity(), "{0x%" PRIx64 "} ", (uint64_t)ink_thread_self());
+    if (num_bytes_written > 0) {
+      format_buf_writer.write(tmp, num_bytes_written);
+    }
   }
 
   //////////////////////////////////////
@@ -282,10 +288,9 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
   // append original format string, and NUL terminate //
   //////////////////////////////////////////////////////
 
-  for (s = format_string; *s; *end_of_format++ = *s++) {
-    ;
-  }
-  *end_of_format++ = NUL;
+  format_buf_writer.write(format_string, format_buf_writer.capacity());
+  format_buf_writer.extend(1);
+  format_buf_writer.write('\0');
 
   //////////////////////////////////////////////////////////////////
   // prepend timestamp into the timestamped version of the buffer //
