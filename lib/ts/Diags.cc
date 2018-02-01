@@ -229,7 +229,11 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
   struct timeval tp;
   const char *s;
   char *buffer, *d, timestamp_buf[48];
-  char format_buf[1024], format_buf_w_ts[1024], *end_of_format;
+  size_t BUF_CAPACITY = 1024;
+  char tmp[BUF_CAPACITY];
+  char format_buf[BUF_CAPACITY], format_buf_w_ts[BUF_CAPACITY], *end_of_format;
+  FixedBufferWriter format_buf_writer(format_buf, BUF_CAPACITY);
+  FixedBufferWriter format_buf_w_ts_writer(format_buf_w_ts, BUF_CAPACITY);
 
   ink_release_assert(diags_level < DiagsLevel_Count);
 
@@ -239,30 +243,18 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
   // and format_buf_w_ts has the same thing with a prepended timestamp. //
   ////////////////////////////////////////////////////////////////////////
 
-  format_buf[0]      = NUL;
-  format_buf_w_ts[0] = NUL;
-
-  /////////////////////////////////////////////////////
-  // format_buf holds 1024 characters, end_of_format //
-  // points to the current available character       //
-  /////////////////////////////////////////////////////
-
-  end_of_format  = format_buf;
-  *end_of_format = NUL;
-
   // add the thread id
-  end_of_format += snprintf(end_of_format, sizeof(format_buf), "{0x%" PRIx64 "} ", (uint64_t)ink_thread_self());
+  int num_bytes_written = snprintf(tmp, sizeof(format_buf), "{0x%" PRIx64 "} ", (uint64_t)ink_thread_self());
+  if (num_bytes_written > 0) {
+    format_buf_writer.write(tmp, num_bytes_written);
+  }
 
   //////////////////////////////////////
   // start with the diag level prefix //
   //////////////////////////////////////
 
-  for (s = level_name(diags_level); *s; *end_of_format++ = *s++) {
-    ;
-  }
-
-  *end_of_format++ = ':';
-  *end_of_format++ = ' ';
+  format_buf_writer.write(level_name(diags_level), strlen(level_name(diags_level)));
+  format_buf_writer.write(": ", 2);
 
   /////////////////////////////
   // append location, if any //
@@ -272,12 +264,9 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
     char *lp, buf[256];
     lp = loc->str(buf, sizeof(buf));
     if (lp) {
-      *end_of_format++ = '<';
-      for (s = lp; *s; *end_of_format++ = *s++) {
-        ;
-      }
-      *end_of_format++ = '>';
-      *end_of_format++ = ' ';
+      format_buf_writer.write("<", 1);
+      format_buf_writer.write(lp, std::min(strlen(lp), sizeof(buf)));
+      format_buf_writer.write("> ", 2);
     }
   }
   //////////////////////////
@@ -285,12 +274,9 @@ Diags::print_va(const char *debug_tag, DiagsLevel diags_level, const SourceLocat
   //////////////////////////
 
   if (debug_tag) {
-    *end_of_format++ = '(';
-    for (s = debug_tag; *s; *end_of_format++ = *s++) {
-      ;
-    }
-    *end_of_format++ = ')';
-    *end_of_format++ = ' ';
+    format_buf_writer.write("(", 1);
+    format_buf_writer.write(debug_tag, strlen(debug_tag));
+    format_buf_writer.write(") ", 2);
   }
   //////////////////////////////////////////////////////
   // append original format string, and NUL terminate //
