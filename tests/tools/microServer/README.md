@@ -44,4 +44,6 @@ Example session:
 }
 ```
 
+Each session should be in its own file, and any number of files may be created to define sessions.
+
 The `response` map may include an `options` string, which is a comma-delimited list of options to be enabled. Currently the only option supported is `skipHooks`, which will ignore any hooks created for the matching request/response pair. See *Options*.
