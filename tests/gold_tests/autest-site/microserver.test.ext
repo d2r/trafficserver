@@ -111,7 +111,7 @@ def addTransactionToSession(txn, JFile):
 
     if jsondata == None:
         jsondata = dict()
-        jsondata["version"] = '0.1'
+        jsondata["version"] = '0.2'
         jsondata["timestamp"] = "1234567890.098"
         jsondata["encoding"] = "url_encoded"
         jsondata["txns"] = list()
@@ -185,7 +185,7 @@ def MakeOriginServer(obj, name, port=False, ip=False, delay=False, ssl=False, lo
     AddMethodToInstance(p, addTransactionToSession)
 
     # Set up health check.
-    addResponse(p, "sessionfile.log", {
+    addResponse(p, "healthcheck.json", {
         "headers": "GET /ruok HTTP/1.1\r\nHost: {}\r\n\r\n".format(ip),
         "timestamp": "1469733493.993",
         "body": ""
