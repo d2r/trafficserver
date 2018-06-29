@@ -23,9 +23,11 @@
 
 #include <catch.hpp>
 
+#include <string_view>
 #include <ts/MemArena.h>
 using ts::MemSpan;
 using ts::MemArena;
+using namespace std::literals;
 
 TEST_CASE("MemArena generic", "[libts][MemArena]")
 {
@@ -54,13 +56,13 @@ TEST_CASE("MemArena freeze and thaw", "[libts][MemArena]")
   REQUIRE(span1.size() == 1024);
   REQUIRE(arena.size() == 1024);
 
-  arena.freeze();
+  arena.freeze(true);
 
   REQUIRE(arena.size() == 0);
   REQUIRE(arena.allocated_size() == 1024);
   REQUIRE(arena.extent() >= 1024);
 
-  arena.thaw();
+  arena.freeze(false);
   REQUIRE(arena.size() == 0);
   REQUIRE(arena.extent() == 0);
 
@@ -71,10 +73,10 @@ TEST_CASE("MemArena freeze and thaw", "[libts][MemArena]")
   REQUIRE(arena.extent() < 3000);
   auto extent = arena.extent();
 
-  arena.freeze();
+  arena.freeze(true);
   arena.alloc(512);
   REQUIRE(arena.extent() > extent); // new extent should be bigger.
-  arena.thaw();
+  arena.freeze(false);
   REQUIRE(arena.size() == 512);
   REQUIRE(arena.extent() > 1536);
 
@@ -84,14 +86,29 @@ TEST_CASE("MemArena freeze and thaw", "[libts][MemArena]")
 
   arena.alloc(512);
   arena.alloc(768);
-  arena.freeze(32000);
-  arena.thaw();
+  arena.freeze(true);
+  arena.reserve(32000);
+  arena.freeze(false);
   arena.alloc(1);
   REQUIRE(arena.extent() >= 32000);
 }
 
 TEST_CASE("MemArena helper", "[libts][MemArena]")
 {
+  struct Thing {
+    int ten{10};
+    std::string name{"name"};
+
+    Thing() {}
+    Thing(int x) : ten(x) {}
+
+    Thing(std::string const &s) : name(s) {}
+
+    Thing(int x, std::string_view s) : ten(x), name(s) {}
+
+    Thing(std::string const &s, int x) : ten(x), name(s) {}
+  };
+
   ts::MemArena arena{256};
   REQUIRE(arena.size() == 0);
   ts::MemSpan s = arena.alloc(56);
@@ -103,7 +120,8 @@ TEST_CASE("MemArena helper", "[libts][MemArena]")
   REQUIRE(!arena.contains((char *)ptr + 300));
   REQUIRE(!arena.contains((char *)ptr - 1));
 
-  arena.freeze(128);
+  arena.freeze(true);
+  arena.reserve(128);
   REQUIRE(arena.contains((char *)ptr));
   REQUIRE(arena.contains((char *)ptr + 100));
   ts::MemSpan s2 = arena.alloc(10);
@@ -112,9 +130,24 @@ TEST_CASE("MemArena helper", "[libts][MemArena]")
   REQUIRE(arena.contains((char *)ptr2));
   REQUIRE(arena.allocated_size() == 56 + 10);
 
-  arena.thaw();
+  arena.freeze(false);
   REQUIRE(!arena.contains((char *)ptr));
   REQUIRE(arena.contains((char *)ptr2));
+
+  Thing *thing_one = arena.make<Thing>();
+
+  REQUIRE(thing_one->ten == 10);
+  REQUIRE(thing_one->name == "name");
+
+  thing_one = arena.make<Thing>(17, "bob"sv);
+
+  REQUIRE(thing_one->name == "bob");
+  REQUIRE(thing_one->ten == 17);
+
+  thing_one = arena.make<Thing>(137, "Dave");
+
+  REQUIRE(thing_one->name == "Dave");
+  REQUIRE(thing_one->ten == 137);
 }
 
 TEST_CASE("MemArena large alloc", "[libts][MemArena]")

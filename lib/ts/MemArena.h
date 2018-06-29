@@ -26,6 +26,7 @@
 #include <new>
 #include <mutex>
 #include <memory>
+#include <utility>
 #include <ts/MemSpan.h>
 #include <ts/Scalar.h>
 #include <tsconfig/IntrusivePtr.h>
@@ -35,13 +36,16 @@ namespace ts
 {
 /** MemArena is a memory arena for allocations.
 
-    The intended use is for allocating many small chunks of memory - few, large allocations are best handled independently.
-    The purpose is to amortize the cost of allocation of each chunk across larger allocations in a heap style. In addition the
-    allocated memory is presumed to have similar lifetimes so that all of the memory in the arena can be de-allocatred en masse.
+    The intended use is for allocating many small chunks of memory - few, large allocations are best
+    handled independently. The purpose is to amortize the cost of allocation of each chunk across
+    larger allocations in a heap style. In addition the allocated memory is presumed to have similar
+    lifetimes so that all of the memory in the arena can be de-allocatred en masse.
 
-    A generation is essentially a block of memory. The normal workflow is to freeze() the current generation, alloc() a larger and
-    newer generation, copy the contents of the previous generation to the new generation, and then thaw() the previous generation.
-    Note that coalescence must be done by the caller because MemSpan will only give a reference to the underlying memory.
+    A generation is essentially a block of memory. The normal workflow is to freeze(true) the
+    current generation, alloc() a larger and newer generation, copy the contents of the previous
+    generation to the new generation, and then freeze(false) the previous generation.
+
+    @note Coalescence must be done by the caller because @c MemSpan will only give a reference to the underlying memory.
  */
 class MemArena
 {
@@ -117,6 +121,21 @@ public:
    */
   MemSpan alloc(size_t n);
 
+  /** Allocate and initialize a block of memory.
+
+      The template type specifies the type to create and any arguments are forwarded to the constructor. Example:
+      @code
+      struct Thing { ... };
+      Thing* thing = arena.make<Thing>(...constructor args...);
+      @endcode
+
+      Do @b not call @c delete an object created this way - that will attempt to free the memory and break. A
+      destructor may be invoked explicitly but the point of this class is that no object in it needs to be
+      deleted, the memory will all be reclaimed when the Arena is destroyed. In general it is a bad idea
+      to make objects in the Arena that own memory that is not also in the Arena.
+  */
+  template <typename T, typename... Args> T *make(Args &&... args);
+
   /** Adjust future block allocation size.
       This does not cause allocation, but instead makes a note of the size @a n and when a new block
       is needed, it will be at least @a n bytes. This is most useful for default constructed instances
@@ -130,26 +149,15 @@ public:
 
       Will "freeze" a generation of memory. Any memory previously allocated can still be used. This is an
       important distinction as freeze does not mean that the memory is immutable, only that subsequent allocations
-      will be in a new generation.
+      will be in a new generation. When the arena is unfrozen, all frozen memory is deallocated.
 
-      If @a n == 0, the first block of next generation will be large enough to hold all existing allocations.
-      This enables coalescence for locality of reference.
+      The first block of next generation will be large enough to hold all existing allocations. If the
+      current next block size (set by default or via @c reserve) is smaller than this, the value is increased.
 
-      @param n Number of bytes for new generation.
+      @param flag @c true to freeze, @c false to unfreeze.
       @return @c *this
    */
-  MemArena &freeze(size_t n = 0);
-
-  /** Unfreeze memory allocation, discard previously frozen memory.
-
-      Will "thaw" away any previously frozen generations. Any generation that is not the current generation is considered
-      frozen because there is no way to allocate in any of those memory blocks. thaw() is the only mechanism for deallocating
-      memory in the arena (other than destroying the arena itself). Thawing away previous generations means that all spans
-      of memory allocated in those generations are no longer safe to use.
-
-      @return @c *this
-   */
-  MemArena &thaw();
+  MemArena &freeze(bool flag);
 
   /** Release all memory.
 
@@ -245,6 +253,13 @@ MemArena::Block::alloc(size_t n)
   MemSpan zret = this->remnant().prefix(n);
   allocated += n;
   return zret;
+}
+
+template <typename T, typename... Args>
+T *
+MemArena::make(Args &&... args)
+{
+  return new (this->alloc(sizeof(T)).data()) T(std::forward<Args>(args)...);
 }
 
 inline MemArena::MemArena() {}

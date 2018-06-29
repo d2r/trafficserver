@@ -100,22 +100,19 @@ MemArena::alloc(size_t n)
 }
 
 MemArena &
-MemArena::freeze(size_t n)
+MemArena::freeze(bool flag)
 {
-  prev       = current;
-  prev_alloc = current_alloc;
-  current.reset();
-  next_block_size = n ? n : current_alloc;
-  current_alloc   = 0;
+  if (flag) {
+    prev       = current;
+    prev_alloc = current_alloc;
+    current.reset();
+    next_block_size = std::max(next_block_size, current_alloc);
+    current_alloc   = 0;
+  } else {
+    prev_alloc = 0;
+    prev.reset();
+  }
 
-  return *this;
-}
-
-MemArena &
-MemArena::thaw()
-{
-  prev_alloc = 0;
-  prev.reset();
   return *this;
 }
 
