@@ -162,7 +162,7 @@ template <typename Derived_t> struct Extendible {
     bool addField(FieldId<Access_t, Field_t> &field_id, std::string const &field_name);
 
     template <typename Field_t> bool addField(FieldId<ACIDPTR, Field_t> &field_id, std::string const &field_name);
-    template <AccessEnum Access_t, typename Field_t> FieldId<Access_t, Field_t> find(std::string const &field_name);
+    template <AccessEnum Access_t, typename Field_t> class FieldId<Access_t, Field_t> find(std::string const &field_name);
 
     /// Add a new Field to this record type (for a C API)
 
@@ -297,17 +297,17 @@ Extendible<Derived_t>::Schema::addField_C(char const *field_name, size_t size, v
 
 template <typename Derived_t>
 template <AccessEnum Access_t, typename Field_t>
-Extendible<Derived_t>::FieldId<Access_t, Field_t>
+class Extendible<Derived_t>::FieldId<Access_t, Field_t>
 Extendible<Derived_t>::Schema::find(std::string const &field_name)
 {
   auto field_iter = fields.find(field_name);
   if (field_iter == fields.end()) {
-    return FieldId<Access_t, Field_t>(); // didn't find name
+    return Extendible<Derived_t>::FieldId<Access_t, Field_t>(); // didn't find name
   }
   FieldSchema &fs = field_iter->second;                    // found name
-  ink_assert(fs.access == Access_t);                       // conflicting access, between add and find
-  ink_assert(fs.type == std::type_index(typeid(Field_t))); // conflicting type, between add and find
-  return FieldId<Access_t, Field_t>(fs.offset);
+  ink_assert(fs.access == Access_t);                       // conflicting access, between field add and find
+  ink_assert(fs.type == std::type_index(typeid(Field_t))); // conflicting type, between field add and find
+  return Extendible<Derived_t>::FieldId<Access_t, Field_t>(fs.offset);
 }
 
 template <typename Derived_t>
