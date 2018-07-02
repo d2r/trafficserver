@@ -58,29 +58,6 @@ struct testField {
 };
 int testField::alive = 0;
 
-TEST_CASE("AcidPtr AcidCommitPtr")
-{
-  AcidPtr<int> p;
-  REQUIRE(p.getPtr() != nullptr);
-  REQUIRE(p.getPtr().get() != nullptr);
-  {
-    AcidCommitPtr<int> w(p);
-    *w = 40;
-  }
-  CHECK(*p.getPtr() == 40);
-  {
-    AcidCommitPtr<int> w = p;
-    *w += 1;
-    CHECK(*p.getPtr() == 40); // new value not commited until end of scope
-  }
-  CHECK(*p.getPtr() == 41);
-  {
-    *AcidCommitPtr<int>(p) += 1; // leaves scope immediately if not named.
-    CHECK(*p.getPtr() == 42);
-  }
-  CHECK(*p.getPtr() == 42);
-}
-
 TEST_CASE("Extendible", "")
 {
   typename Derived::super_type::BitFieldId bit_a, bit_b, bit_c;
@@ -275,55 +252,5 @@ TEST_CASE("Extendible", "")
     delete &d;
   }
 
-  INFO("ACIDPTR timing test")
-  if (0) {
-    const int N = 1000;
-    Derived::FieldId<ATOMIC, uint32_t> fld_read_duration;
-    Derived::FieldId<ATOMIC, uint32_t> fld_write_duration;
-    REQUIRE(Derived::schema.addField(fld_read_duration, "read_duration"));
-    REQUIRE(Derived::schema.addField(fld_write_duration, "write_duration"));
-
-    shared_ptr<Derived> sptr(new Derived());
-    auto reader_test = [sptr, tf_a, fld_read_duration]() {
-      auto start                                       = std::chrono::system_clock::now();
-      const std::shared_ptr<const testField> tf_a_sptr = sptr->get(tf_a);
-      auto end                                         = std::chrono::system_clock::now();
-      uint8_t v                                        = tf_a_sptr->arr[0];
-      v++;
-      std::this_thread::sleep_for(std::chrono::nanoseconds(5)); // fake work
-      std::chrono::duration<double> elapsed_seconds = end - start;
-      sptr->get(fld_read_duration) += elapsed_seconds.count() * 1000000;
-    };
-
-    auto writer_test = [sptr, tf_a, fld_write_duration]() {
-      auto start = std::chrono::system_clock::now();
-      AcidCommitPtr<testField> tf_a_sptr(sptr->writeAcidPtr(tf_a));
-      auto end = std::chrono::system_clock::now();
-      tf_a_sptr->arr[0]++;
-      std::this_thread::sleep_for(std::chrono::nanoseconds(5)); // fake work, holds write locks til end of scope.
-      std::chrono::duration<double> elapsed_seconds = end - start;
-      sptr->get(fld_write_duration) += elapsed_seconds.count() * 1000000;
-    };
-
-    std::thread writers[N];
-    std::thread readers[N];
-
-    for (int i = 0; i < N; i++) {
-      writers[i] = std::thread(writer_test);
-      readers[i] = std::thread(reader_test);
-    }
-
-    for (int i = 0; i < N; i++) {
-      writers[i].join();
-      readers[i].join();
-    }
-
-    uint32_t read_time  = sptr->get(fld_read_duration) / N;
-    uint32_t write_time = sptr->get(fld_write_duration) / N;
-    INFO("avg reader blocked time = " << read_time << " ns");
-    INFO("avg writer blocked time = " << write_time << " ns");
-    CHECK(false);
-  }
   INFO("Extendible Test Complete")
 }
-// TODO: write multithreaded tests.

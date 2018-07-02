@@ -268,6 +268,7 @@ test_tslib_CXXFLAGS = -Wno-array-bounds $(AM_CXXFLAGS)
 test_tslib_LDADD = libtsutil.la $(top_builddir)/iocore/eventsystem/libinkevent.a
 test_tslib_SOURCES = \
 	unit-tests/unit_test_main.cc \
+  unit-tests/test_AcidPtr.cc \
 	unit-tests/test_BufferWriter.cc \
 	unit-tests/test_BufferWriterFormat.cc \
 	unit-tests/test_Extendible.cc \
