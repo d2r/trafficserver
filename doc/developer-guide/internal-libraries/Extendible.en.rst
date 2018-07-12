@@ -30,14 +30,22 @@ Synopsis
 
    #include "ts/Extendible.h"
 
-Allow code (and Plugins) to declare member variables of a class during system init. Like metadata, but allocated and accessed more efficiently, and staticly.
+Extendible allows Plugins to append additional storage to Core data structures.
+Use Case:
+TSCore
 
-Provide API for atomic and thread safe field access, to reduce the complexity and lock contention of it's container and user code.
+  Defines class Host as Extendible
+
+TSPlugin HealthStatus
+
+  Appends Field "down reason code" to Host
+  Now the plugin does not need to create completely new lookup table and all implementation that comes with it.
+
 
 Description
 +++++++++++
 
-A data class that inherits from Extendible, uses a CRTP (Curiously Recursive Template Pattern) so that it's static Schema instance is unique from other Extendible types.
+A data class that inherits from Extendible, uses a CRTP (Curiously Recurring Template Pattern) so that its static Schema instance is unique among other Extendible types.
 
 .. code-block:: cpp
 
@@ -50,16 +58,16 @@ Structures
 * FieldId<AccessType_, FieldType> - the handle used to access a field. These are templated to prevent human error, and branching logic.
 * FieldId_C - the handle used to access a field through C API. Human error not allowed by convention.
 * FieldSchema - stores attributes, constructor and destructor of a field.
-* Schema - manages fields and memory layout of an Extendible type. 
+* Schema - manages fields and memory layout of an Extendible type.
 * Extendible<DerivedType> - allocates block of memory, uses FieldId or schema to access slices of memory.
 
 
-During system init, code and plugins can add fields to the Extendible's schema. This will update the `Memory Layout`_ of the schema, and the memory offsets of all fields. The schema does not know the FieldType, but it stores the byte size and creates lambdas of the type's constructor and destructor. And to avoid corruption, the code asserts that no instances are in use when adding fields. 
+During system init, code and plugins can add fields to the Extendible's schema. This will update the `Memory Layout`_ of the schema, and the memory offsets of all fields. The schema does not know the FieldType, but it stores the byte size and creates lambdas of the type's constructor and destructor. And to avoid corruption, the code asserts that no instances are in use when adding fields.
 
 .. code-block:: cpp
 
    ExtendibleExample:FieldId<ATOMIC,int> fld_my_int;
-   
+
    void PluginInit() {
      fld_my_int = ExtendibleExample::schema.addField("my_plugin_int");
    }
@@ -75,11 +83,11 @@ When an Extendible derived class is instantiated, new() will allocate a block of
 
 Memory Layout
 -------------
-Memory is always arranged in the following order:
+One block of memory is allocated per Extendible, which include all member variables and appended fields.
+Within the block, memory is arranged in the following order:
 
 #. Derived members (+padding align next field)
-#. Largest Field
-#. Smallest Field
+#. Fields (largest to smallest)
 #. Packed Bits
 
 +-------------------------------------------+
@@ -90,40 +98,46 @@ Memory is always arranged in the following order:
 |int real_member  |atomic<int> my_plugin_int|
 +-----------------+-------------------------+
 
-Extendible was written for efficient thread safety. When a field is added to the Extendible type, data type and access type part of the addField template, resulting in a strongly typed FieldId, and then will be implicitly enforced through every access of that field. 
+Strongly Typed
+--------------
+Extendible was written for efficient thread safety. When a field is added to the Extendible type, data type and access type part of the addField template, resulting in a strongly typed FieldId, and then will be implicitly enforced through every access of that field.
 
 .. code-block:: cpp
 
-   int read_my_int(ExtendibleExample &ext) {
-     return ext.get(fld_my_int);
-   }
-   void write_my_int(ExtendibleExample &ext, int val) {
-     ext.get(fld_my_int) = val;
-   }
+   class Food : Extendible<Food> {}
+   auto fld_food_weight = Food.schema.addField<STATIC,float>("weight");
+   auto fld_expr_date = Food.schema.addField<STATIC,time_t>("expire date");
+   Food banana;
+
+   class Car : Extendible<Car> {}
+   auto fld_max_speed = Car.schema.addField<STATIC,float>("max_speed");
+   auto fld_car_weight = Car.schema.addField<STATIC,float>("weight"); // 'weight' is unique within 'Car'
+   Car camry;
 
    // Common user errors
-   bool type_mismatch(ExtendibleExample &ext) {
-     return ext.writeBit(fld_my_int); // Compile error: writeBit(field<BIT,bool>): field is not of type FieldId<BIT,bool>
-   }
-   int field_mismatch(ExtendibleOtherType &ext) {
-     return ext.get(fld_my_int); // Compile error: fld_my_int is not of type ExtendibleOtherType::FieldId
-   }
 
+   float expire_date = banana.get(fld_expr_date);
+   //^^^                                              Compile error: cannot convert time_t to float
+   float speed = banana.get(fld_max_speed);
+   //                       ^^^^^^^^^^^^^             Compile error: fld_max_speed is not of type Extendible<Food>::FieldId
+   float weight = camry.get(fld_food_weight);
+   //                       ^^^^^^^^^^^^^^^           Compile error: fld_food_weight is not of type Extendible<Car>::FieldId
 
 Field Access Types
 ------------------
 .. _AccessType:
 
 ============   =======================================   ============================================================   ========================================   ================================================
-Enums          Allocates                                 API                                                            Pros                                       Cons  
+Enums          Allocates                                 API                                                            Pros                                       Cons
 ============   =======================================   ============================================================   ========================================   ================================================
 ATOMIC         std::atomic<FieldType>                    :code:`get(FieldId)`                                           Leverages std::atomic<> API. No Locking.   Only works on small data types.
-BIT            1 bit from packed bits                    :code:`get(FieldId), readBit(FieldId), writeBit(FieldId)`      Memory efficient.                          Cannot return reference. 
-CONST          FieldType                                 :code:`get(FieldId), writeConst(FieldId)`                      Direct reference. Fast.                    No thread protection.
+BIT            1 bit from packed bits                    :code:`get(FieldId), readBit(FieldId), writeBit(FieldId)`      Memory efficient.                          Cannot return reference.
 :ref:ACIDPTR   shared_ptr<FieldType> = new FieldType()   :code:`get(FieldId), writeAcidPtr(FieldId)`                    Avoid skew in non-atomic structures.       Non-contiguous memory allocations. Uses locking.
-C_API          a number of bytes                         :code:`get()`                                                  Can use in C.                              No thread protection.
+STATIC         FieldType                                 :code:`get(FieldId), init(FieldId)`                            Const reference. Fast. Type safe.          No concurrency protection.
+DIRECT         FieldType                                 :code:`get(FieldId)`                                           Direct reference. Fast. Type safe.         No concurrency protection.
+C_API          a number of bytes                         :code:`get(FieldId_C)`                                         Can use in C.                              No concurrency protection. Not type safe.
 ============   =======================================   ============================================================   ========================================   ================================================
 
-:code:`operator[](FieldId)` has been overridden to call :code:`get(FieldId)`.
+:code:`operator[](FieldId)` has been overridden to call :code:`get(FieldId)` for all access types.
 
-Unfortunately our data is not "one type fits all". I expect that most config values will be stored as CONST, most states values will be ATOMIC or BIT, while vectored results will be :ref:ACIDPTR.
+Unfortunately our data is not "one type fits all". I expect that most config values will be stored as STATIC, most states values will be ATOMIC or BIT, while vectored results will be :ref:ACIDPTR.

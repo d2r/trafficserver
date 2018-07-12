@@ -55,7 +55,14 @@ namespace MT // (multi-threaded)
 /// used to store byte offsets to fields
 using ExtendibleOffset_t = uint16_t;
 /// all types must allow unblocking MT read access
-enum AccessEnum { ATOMIC, BIT, CONST, ACIDPTR, C_API, NUM_ACCESS_TYPES };
+enum AccessEnum { ATOMIC, BIT, STATIC, ACIDPTR, DIRECT, C_API, NUM_ACCESS_TYPES };
+
+inline bool &
+areStaticsFrozen()
+{
+  static bool frozen = 0;
+  return frozen;
+}
 
 /**
  * @brief Allows code (and Plugins) to declare member variables during system init.
@@ -114,13 +121,17 @@ template <typename Derived_t> struct Extendible {
   bool const readBit(BitFieldId field) const;
   void writeBit(BitFieldId field, bool const val);
 
-  /// CONST API - immutable field, value is not expected to change, no internal thread safety
-  template <typename Field_t> Field_t const &get(FieldId<CONST, Field_t> field) const;
-  template <typename Field_t> Field_t &writeConst(FieldId<CONST, Field_t> field);
+  /// STATIC API - immutable field, value is not expected to change, no internal thread safety
+  template <typename Field_t> Field_t const &get(FieldId<STATIC, Field_t> field) const;
+  template <typename Field_t> Field_t &init(FieldId<STATIC, Field_t> field);
 
   /// ACIDPTR API - returns a const shared pointer to last committed field value
   template <typename Field_t> std::shared_ptr<const Field_t> get(FieldId<ACIDPTR, Field_t> field) const;
   template <typename Field_t> AcidCommitPtr<Field_t> writeAcidPtr(FieldId<ACIDPTR, Field_t> field);
+
+  /// DIRECT API -  mutable field, no internal thread safety, expected to be performed externally.
+  template <typename Field_t> Field_t const &get(FieldId<DIRECT, Field_t> field) const;
+  template <typename Field_t> Field_t &get(FieldId<DIRECT, Field_t> field);
 
   /// C API - returns pointer, no internal thread safety
   void *get(FieldId_C &field);
@@ -466,17 +477,18 @@ Extendible<Derived_t>::writeBit(BitFieldId field, bool const val)
 template <typename Derived_t>
 template <typename Field_t>
 Field_t const & // value is not expected to change, or be freed while 'this' exists.
-Extendible<Derived_t>::get(FieldId<CONST, Field_t> field) const
+Extendible<Derived_t>::get(FieldId<STATIC, Field_t> field) const
 {
   return *at_offset<const Field_t *>(field.offset());
 }
 
-/// return a reference to an const field that is non-const for initialization purposes
+/// return a reference to an static field that is non-const for initialization purposes
 template <typename Derived_t>
 template <typename Field_t>
 Field_t &
-Extendible<Derived_t>::writeConst(FieldId<CONST, Field_t> field)
+Extendible<Derived_t>::init(FieldId<STATIC, Field_t> field)
 {
+  ink_release_assert(!areStaticsFrozen());
   return *at_offset<Field_t *>(field.offset());
 }
 
@@ -498,6 +510,24 @@ Extendible<Derived_t>::writeAcidPtr(FieldId<ACIDPTR, Field_t> field)
 {
   AcidPtr<Field_t> &reader = *at_offset<AcidPtr<Field_t> *>(field.offset());
   return AcidCommitPtr<Field_t>(reader);
+}
+
+/// return a reference to a field, without concurrent access protection
+template <typename Derived_t>
+template <typename Field_t>
+Field_t & // value is not expected to change, or be freed while 'this' exists.
+Extendible<Derived_t>::get(FieldId<DIRECT, Field_t> field)
+{
+  return *at_offset<Field_t *>(field.offset());
+}
+
+/// return a const reference to a field, without concurrent access protection
+template <typename Derived_t>
+template <typename Field_t>
+Field_t const & // value is not expected to change, or be freed while 'this' exists.
+Extendible<Derived_t>::get(FieldId<DIRECT, Field_t> field) const
+{
+  return *at_offset<const Field_t *>(field.offset());
 }
 
 /// C API

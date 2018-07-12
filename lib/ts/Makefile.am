@@ -73,7 +73,7 @@ libtsutil_la_SOURCES = \
 	DynArray.h \
 	EventNotify.cc \
 	EventNotify.h \
-  Extendible.h \
+	Extendible.h \
 	fastlz.c \
 	fastlz.h \
 	Hash.cc \
@@ -282,7 +282,6 @@ test_tslib_SOURCES = \
 	unit-tests/test_Scalar.cc \
 	unit-tests/test_scoped_resource.cc \
 	unit-tests/test_TextView.cc 
-# add your catch based test file here for tslib
  
 CompileParseRules_SOURCES = CompileParseRules.cc
 

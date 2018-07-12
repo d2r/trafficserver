@@ -252,5 +252,36 @@ TEST_CASE("Extendible", "")
     delete &d;
   }
 
+  INFO("STATIC")
+  {
+    typename Derived::super_type::FieldId<STATIC, int> tf_d;
+    Derived::schema.addField(tf_d, "tf_d");
+    REQUIRE(tf_d.isValid());
+    Derived &d         = *(new Derived());
+    d.init(tf_d)       = 5;
+    areStaticsFrozen() = true;
+
+    CHECK(d.get(tf_d) == 5);
+
+    // this asserts when areStaticsFrozen() = true
+    // CHECK(d.init(tf_d) == 5);
+    delete &d;
+  }
+
+  INFO("DIRECT")
+  {
+    typename Derived::super_type::FieldId<DIRECT, int> tf_e;
+    Derived::schema.addField(tf_e, "tf_e");
+    REQUIRE(tf_e.isValid());
+    Derived &d  = *(new Derived());
+    d.get(tf_e) = 5;
+
+    CHECK(d.get(tf_e) == 5);
+
+    // this asserts when areStaticsFrozen() = true
+    // CHECK(d.init(tf_e) == 5);
+    delete &d;
+  }
+
   INFO("Extendible Test Complete")
 }
