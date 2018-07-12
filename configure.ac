@@ -298,6 +298,8 @@ AM_CONDITIONAL([BUILD_TESTS], [test 0 -ne $has_tests])
 # makes the diagnostic output ugly and hard to follow.
 AC_ARG_VAR(JAVA, [path to java executor])
 AC_CHECK_PROG(JAVA, java, java)
+# AM_CONDITIONAL must always be evaluated at least once outside of conditionals.
+AM_CONDITIONAL([BUILD_MANPAGES], [false])
 AC_MSG_CHECKING([whether to build documentation])
 AC_ARG_ENABLE([docs],
   [AS_HELP_STRING([--enable-docs],[enable documentation building])],
@@ -342,7 +344,6 @@ AC_ARG_ENABLE([docs],
       AM_CONDITIONAL([BUILD_MANPAGES], [true])
       AC_MSG_RESULT([yes])
     ], [
-      AM_CONDITIONAL([BUILD_MANPAGES], [false])
       AC_MSG_RESULT([no])
     ])
 
