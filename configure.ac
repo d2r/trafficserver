@@ -320,6 +320,7 @@ AC_ARG_ENABLE([docs],
         AC_ERROR([Doc building disabled, java required but not found])
       ])
     AC_ARG_VAR(SPHINXBUILD, [the sphinx-build documentation generator])
+    AC_ARG_VAR(SPHINXOPTS, [additional sphinx-build options])
     AC_PATH_PROG([SPHINXBUILD], [sphinx-build], [])
     AS_IF(["$PYTHON" "$srcdir/doc/checkvers.py" --check-version],
       [
@@ -329,6 +330,22 @@ AC_ARG_ENABLE([docs],
         enable_doc_build=no
         AC_ERROR([Doc building disabled, check sphinx installation])
       ])
+
+
+    AC_SUBST(TS_MAN1_MANPAGES)
+    AC_SUBST(TS_MAN3_MANPAGES)
+    AC_SUBST(TS_MAN5_MANPAGES)
+    AC_SUBST(TS_MAN8_MANPAGES)
+
+    AC_MSG_CHECKING([whether to build man pages])
+    AS_IF([test "x$sphinx_version_check" = "xyes" -a "x$SPHINXBUILD" != "xfalse"], [
+      AM_CONDITIONAL([BUILD_MANPAGES], [true])
+      AC_MSG_RESULT([yes])
+    ], [
+      AM_CONDITIONAL([BUILD_MANPAGES], [false])
+      AC_MSG_RESULT([no])
+    ])
+
   ],
   [enable_doc_build=no]
 )
@@ -732,26 +749,11 @@ AC_CHECK_TOOL(AR, ar, ar)
 AC_ISC_POSIX
 
 AC_ARG_VAR(RPATH, [path to be added to rpath])
-AC_ARG_VAR(SPHINXOPTS, [additional sphinx-build options])
 
 AC_ARG_VAR([CLANG_TIDY], [clang-tidy command])
 
 # Default CLANG_TIDY to "clang-tidy", or "false" if it is not present.
 AC_PATH_PROG([CLANG_TIDY], [clang-tidy],[false])
-
-AC_SUBST(TS_MAN1_MANPAGES)
-AC_SUBST(TS_MAN3_MANPAGES)
-AC_SUBST(TS_MAN5_MANPAGES)
-AC_SUBST(TS_MAN8_MANPAGES)
-
-AC_MSG_CHECKING([whether to build man pages])
-AS_IF([test "x$sphinx_version_check" = "xyes" -a "x$SPHINXBUILD" != "xfalse"], [
-  AM_CONDITIONAL([BUILD_MANPAGES], [true])
-  AC_MSG_RESULT([yes])
-], [
-  AM_CONDITIONAL([BUILD_MANPAGES], [false])
-  AC_MSG_RESULT([no])
-])
 
 # Do bison check by hand because we must do a version check.
 # Use YACC because it makes autotools shut up.
