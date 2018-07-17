@@ -34,32 +34,31 @@
 /// Apache Traffic Server commons.
 namespace ts
 {
-/** MemArena is a memory arena for allocations.
+/** A memory arena.
 
     The intended use is for allocating many small chunks of memory - few, large allocations are best
-    handled independently. The purpose is to amortize the cost of allocation of each chunk across
-    larger allocations in a heap style. In addition the allocated memory is presumed to have similar
-    lifetimes so that all of the memory in the arena can be de-allocatred en masse.
-
-    A generation is essentially a block of memory. The normal workflow is to freeze(true) the
-    current generation, alloc() a larger and newer generation, copy the contents of the previous
-    generation to the new generation, and then freeze(false) the previous generation.
-
-    @note Coalescence must be done by the caller because @c MemSpan will only give a reference to the underlying memory.
+    handled through other mechanisms. The purpose is to amortize the cost of allocation of each
+    chunk across larger internal allocations ("reserving memory"). In addition the allocated memory
+    chunks are presumed to have similar lifetimes so all of the memory in the arena can be released
+    when the arena is destroyed.
  */
 class MemArena
 {
   using self_type = MemArena; ///< Self reference type.
 protected:
-  struct Block;
+  struct Block; // Forward declare
   using BlockPtr = ts::IntrusivePtr<Block>;
   friend struct IntrusivePtrPolicy<Block>;
   /** Simple internal arena block of memory. Maintains the underlying memory.
+   *
+   * Intrusive pointer is used to keep all of the memory in this single block. This struct is just
+   * the header on the full memory block allowing the raw memory and the meta data to be obtained
+   * in a single memory allocation.
    */
   struct Block : public ts::IntrusivePtrCounter {
     size_t size;         ///< Actual block size.
     size_t allocated{0}; ///< Current allocated (in use) bytes.
-    BlockPtr next;       ///< Previously allocated block list.
+    BlockPtr next;       ///< List of previous blocks.
 
     /** Construct to have @a n bytes of available storage.
      *
@@ -68,14 +67,19 @@ protected:
      * @param n The amount of storage.
      */
     Block(size_t n);
+
     /// Get the start of the data in this block.
     char *data();
+
     /// Get the start of the data in this block.
     const char *data() const;
+
     /// Amount of unallocated storage.
     size_t remaining() const;
+
     /// Span of unallocated storage.
     MemSpan remnant();
+
     /** Allocate @a n bytes from this block.
      *
      * @param n Number of bytes to allocate.
@@ -93,7 +97,7 @@ protected:
     /** Override standard delete.
      *
      * This is required because the allocated memory size is larger than the class size which requires
-     * passing different parameters to de-allocate the memory.
+     * calling @c free differently.
      *
      * @param ptr Memory to be de-allocated.
      */
@@ -101,20 +105,26 @@ protected:
   };
 
 public:
-  /** Default constructor.
-   * Construct with no memory.
-   */
-  MemArena();
-  /** Construct with @a n bytes of storage.
+  /** Construct with reservation hint.
    *
-   * @param n Number of bytes in the initial block.
+   * No memory is initially reserved, but when memory is needed this will be done so at least
+   * @a n bytes of available memory is reserved.
+   *
+   * To pre-reserve call @c alloc(0), e.g.
+   * @code
+   * MemArena arena(512); // Make sure at least 512 bytes available in first block.
+   * arena.alloc(0); // Force allocation of first block.
+   * @endcode
+   *
+   * @param n Minimum number of available bytes in the first internally reserved block.
    */
-  explicit MemArena(size_t n);
+  explicit MemArena(size_t n = DEFAULT_BLOCK_SIZE);
 
   /** Allocate @a n bytes of storage.
 
-      Returns a span of memory within the arena. alloc() is self expanding but DOES NOT self coalesce. This means
-      that no matter the arena size, the caller will always be able to alloc() @a n bytes.
+      Returns a span of memory within the arena. alloc() is self expanding but DOES NOT self
+      coalesce. This means that no matter the arena size, the caller will always be able to alloc()
+      @a n bytes.
 
       @param n number of bytes to allocate.
       @return a MemSpan of the allocated memory.
@@ -136,28 +146,25 @@ public:
   */
   template <typename T, typename... Args> T *make(Args &&... args);
 
-  /** Adjust future block allocation size.
-      This does not cause allocation, but instead makes a note of the size @a n and when a new block
-      is needed, it will be at least @a n bytes. This is most useful for default constructed instances
-      where the initial allocation should be delayed until use.
-      @param n Minimum size of next allocated block.
-      @return @a this
-   */
-  self_type &reserve(size_t n);
+  /** Freeze reserved memory.
 
-  /** Freeze memory allocation.
+      All internal memory blocks are frozen and will not be involved in future allocations. Subsequent
+      allocation will reserve new internal blocks. By default the first reserved block will be large
+      enough to contain all frozen memory. If this is not correct a different target can be
+      specified as @a n.
 
-      Will "freeze" a generation of memory. Any memory previously allocated can still be used. This is an
-      important distinction as freeze does not mean that the memory is immutable, only that subsequent allocations
-      will be in a new generation. When the arena is unfrozen, all frozen memory is deallocated.
-
-      The first block of next generation will be large enough to hold all existing allocations. If the
-      current next block size (set by default or via @c reserve) is smaller than this, the value is increased.
-
-      @param flag @c true to freeze, @c false to unfreeze.
+      @param n Target number of available bytes in the next reserved internal block.
       @return @c *this
    */
-  MemArena &freeze(bool flag);
+  MemArena &freeze(size_t n = 0);
+
+  /** Unfreeze arena.
+   *
+   * Frozen memory is released.
+   *
+   * @return @c *this
+   */
+  self_type &thaw();
 
   /** Release all memory.
 
@@ -188,11 +195,9 @@ public:
   /** Total memory footprint, including wasted space.
    * @return Total memory footprint.
    */
-  size_t extent() const;
+  size_t reserved_size() const;
 
 protected:
-  /// creates a new @c Block with at least @n free space.
-
   /** Internally allocates a new block of memory of size @a n bytes.
    *
    * @param n Size of block to allocate.
@@ -207,14 +212,19 @@ protected:
   /// Initial block size to allocate if not specified via API.
   static constexpr size_t DEFAULT_BLOCK_SIZE = Page::SCALE - Paragraph{round_up(ALLOC_HEADER_SIZE + sizeof(Block))};
 
-  size_t current_alloc = 0; ///< Total allocations in the active generation.
+  size_t _active_allocated = 0; ///< Total allocations in the active generation.
+  size_t _active_reserved  = 0; ///< Total current reserved memory.
   /// Total allocations in the previous generation. This is only non-zero while the arena is frozen.
-  size_t prev_alloc = 0;
+  size_t _prev_allocated = 0;
+  /// Total frozen reserved memory.
+  size_t _prev_reserved = 0;
 
-  size_t next_block_size = DEFAULT_BLOCK_SIZE; ///< Next internal block size
+  /// Minimum free space needed in the next allocated block.
+  /// This is not zero iff @c reserve was called.
+  size_t _reserve_hint = 0;
 
-  BlockPtr prev;    ///< Previous generation.
-  BlockPtr current; ///< Head of allocations list. Allocate from this.
+  BlockPtr _prev;   ///< Previous generation, frozen memory.
+  BlockPtr _active; ///< Current generation. Allocate here.
 };
 
 // Implementation
@@ -262,7 +272,7 @@ MemArena::make(Args &&... args)
   return new (this->alloc(sizeof(T)).data()) T(std::forward<Args>(args)...);
 }
 
-inline MemArena::MemArena() {}
+inline MemArena::MemArena(size_t n) : _reserve_hint(n) {}
 
 inline MemSpan
 MemArena::Block::remnant()
@@ -273,32 +283,31 @@ MemArena::Block::remnant()
 inline size_t
 MemArena::size() const
 {
-  return current_alloc;
+  return _active_allocated;
 }
 
 inline size_t
 MemArena::allocated_size() const
 {
-  return prev_alloc + current_alloc;
-}
-
-inline MemArena &
-MemArena::reserve(size_t n)
-{
-  next_block_size = n;
-  return *this;
+  return _prev_allocated + _active_allocated;
 }
 
 inline size_t
 MemArena::remaining() const
 {
-  return current ? current->remaining() : 0;
+  return _active ? _active->remaining() : 0;
 }
 
 inline MemSpan
 MemArena::remnant() const
 {
-  return current ? current->remnant() : MemSpan{};
+  return _active ? _active->remnant() : MemSpan{};
+}
+
+inline size_t
+MemArena::reserved_size() const
+{
+  return _active_reserved + _prev_reserved;
 }
 
 } // namespace ts
