@@ -90,14 +90,6 @@ Within the block, memory is arranged in the following order:
 #. Fields (largest to smallest)
 #. Packed Bits
 
-+-------------------------------------------+
-|Extendible::new()                          |
-+-----------------+-------------------------+
-|ExtendibleExample|Fields                   |
-+-----------------+-------------------------+
-|int real_member  |atomic<int> my_plugin_int|
-+-----------------+-------------------------+
-
 Strongly Typed
 --------------
 Extendible was written for efficient thread safety. When a field is added to the Extendible type, data type and access type part of the addField template, resulting in a strongly typed FieldId, and then will be implicitly enforced through every access of that field.

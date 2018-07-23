@@ -581,4 +581,6 @@ Extendible<Derived_t>::at_offset(ExtendibleOffset_t offset) const
   return reinterpret_cast<Return_t>(this_as_char_ptr() + offset);
 }
 
+// TODO: override std::get<field_t>(Extendible &)
+
 }; // namespace MT

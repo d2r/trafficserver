@@ -75,7 +75,8 @@ private:
   std::vector<Mutex_t> mutexes;
 
   /// use the other constructor to define how many locks you want.
-  LockPool() = delete;
+  LockPool()                 = delete;
+  LockPool(LockPool const &) = delete;
 };
 
 template <typename T> class AcidCommitPtr;

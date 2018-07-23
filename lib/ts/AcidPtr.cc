@@ -1,5 +1,5 @@
 /**
-  @file Extendible.cc
+  @file AcidPtr defines global LockPools for accessing and committing
 
   @section license License
 
