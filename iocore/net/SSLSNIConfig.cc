@@ -82,6 +82,8 @@ SNIConfigParams::loadSNIConfig()
       TunnelMap.emplace(item.fqdn.data(), item.tunnel_destination);
     }
 
+    auto ai3 = new SNI_IpAllow(item.ip_allow, servername);
+    aiVec->push_back(ai3);
     // set the next hop properties
     SSLConfig::scoped_config params;
     auto clientCTX  = params->getCTX(servername);
@@ -151,7 +153,9 @@ SNIConfigParams::Initialize()
 
   ts::Errata zret = Y_sni.loader(sni_filename);
   if (!zret.isOK()) {
-    Note("failed to reload ssl_server_name.yaml");
+    std::stringstream errMsg;
+    errMsg << zret;
+    Error("failed to load ssl_server_name.yaml: %s", errMsg.str().c_str());
     return 1;
   }
 

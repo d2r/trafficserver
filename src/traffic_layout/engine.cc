@@ -36,6 +36,7 @@
 #include "file_system.h"
 #include "ts/runroot.h"
 
+#include <cctype>
 #include <fstream>
 #include <iostream>
 #include <ftw.h>
@@ -43,7 +44,42 @@
 #include <yaml-cpp/yaml.h>
 
 // for nftw check_directory
-std::string directory_check = "";
+std::string directory_check;
+
+// the function for the checking of the yaml file in the passed in path
+// if found return the path, if not return empty string
+std::string
+check_path(const std::string &path)
+{
+  std::ifstream check_file;
+  check_file.open(Layout::relative_to(path, "runroot_path.yml"));
+  if (check_file.good()) {
+    return path;
+  }
+  return {};
+}
+
+// the function for the checking of the yaml file in passed in directory or parent directory
+// if found return the parent path containing the yaml file
+std::string
+check_parent_path(const std::string &path)
+{
+  std::string yaml_path = path;
+  if (yaml_path.back() == '/') {
+    yaml_path.pop_back();
+  }
+  // go up to 4 level of parent directories
+  for (int i = 0; i < 4; i++) {
+    if (yaml_path.empty()) {
+      return {};
+    }
+    if (!check_path(yaml_path).empty()) {
+      return yaml_path;
+    }
+    yaml_path = yaml_path.substr(0, yaml_path.find_last_of("/"));
+  }
+  return {};
+}
 
 // check if we can create the runroot using path
 // return true if the path is good to use
@@ -147,6 +183,8 @@ RunrootEngine::runroot_help_message(const bool runflag, const bool cleanflag, co
                  "--force   Force to create ts_runroot even directory already exists\n"
                  "--absolute    Produce absolute path in the yaml file\n"
                  "--run-root(=/path)  Using specified TS_RUNROOT as sandbox\n"
+                 "--copy-style=[STYLE] Specify style (FULL, HARD, SOFT) when copying executable\n"
+                 "--layout=[/path] Use specific layout (providing yaml file) to create runroot\n"
               << std::endl;
   }
   if (cleanflag) {
@@ -190,7 +228,7 @@ RunrootEngine::runroot_parse()
       abs_flag = true;
       continue;
     }
-    if (argument.substr(0, RUNROOT_WORD_LENGTH) == "--run-root") {
+    if (argument.substr(0, RUNROOT_WORD.size()) == RUNROOT_WORD) {
       continue;
     }
     // set init flag
@@ -214,6 +252,26 @@ RunrootEngine::runroot_parse()
     // set fix flag
     if (argument == "--fix") {
       fix_flag = true;
+      continue;
+    }
+    if (argument.substr(0, COPYSTYLE_WORD.size()) == COPYSTYLE_WORD) {
+      std::string style = argument.substr(COPYSTYLE_WORD.size() + 1);
+      transform(style.begin(), style.end(), style.begin(), ::tolower);
+      if (style == "full") {
+        copy_style = FULL;
+      } else if (style == "soft") {
+        copy_style = SOFT;
+      } else {
+        copy_style = HARD;
+      }
+      continue;
+    }
+    if (argument.substr(0, LAYOUT_WORD.size()) == LAYOUT_WORD) {
+      if (argument.size() <= LAYOUT_WORD.size() + 1) {
+        layout_file = "";
+      } else {
+        layout_file = argument.substr(LAYOUT_WORD.size() + 1);
+      }
       continue;
     }
     if (argument == "--path") {
@@ -317,7 +375,7 @@ RunrootEngine::clean_runroot()
     }
   } else {
     // handle the map and deleting of each directories specified in the yml file
-    RunrootMapType map = runroot_map(clean_root);
+    RunrootMapType map = runroot_map(Layout::relative_to(clean_root, "runroot_path.yml"));
     map.erase(LAYOUT_PREFIX);
     map.erase(LAYOUT_EXEC_PREFIX);
     for (auto it : map) {
@@ -440,6 +498,29 @@ RunrootEngine::copy_runroot(const std::string &original_root, const std::string 
   original_map[LAYOUT_INFODIR]       = TS_BUILD_INFODIR;
   original_map[LAYOUT_CACHEDIR]      = TS_BUILD_CACHEDIR;
 
+  RunrootMapType new_map = original_map;
+  // use the user provided layout: layout_file
+  if (layout_file.size() != 0) {
+    try {
+      YAML::Node yamlfile = YAML::LoadFile(layout_file);
+      for (auto it : yamlfile) {
+        std::string key   = it.first.as<std::string>();
+        std::string value = it.second.as<std::string>();
+        auto iter         = new_map.find(key);
+        if (iter != new_map.end()) {
+          iter->second = value;
+        } else {
+          if (key != "prefix") {
+            ink_warning("Unknown item from %s: '%s'", layout_file.c_str(), key.c_str());
+          }
+        }
+      }
+    } catch (YAML::Exception &e) {
+      ink_warning("Unable to read provided YAML file '%s': %s", layout_file.c_str(), e.what());
+      ink_notice("Continuing with default value");
+    }
+  }
+
   // copy each directory to the runroot path
   // symlink the executables
   // set up path_map for yaml to emit key-value pairs
@@ -451,19 +532,19 @@ RunrootEngine::copy_runroot(const std::string &original_root, const std::string 
     } else {
       join_path = it.second;
     }
+    std::string new_join_path = new_map[it.first];
 
     std::string old_path = Layout::relative_to(original_root, join_path);
-    std::string new_path = Layout::relative_to(ts_runroot, join_path);
+    std::string new_path = Layout::relative_to(ts_runroot, new_join_path);
     if (abs_flag) {
-      path_map[it.first] = Layout::relative_to(ts_runroot, join_path);
+      path_map[it.first] = Layout::relative_to(ts_runroot, new_join_path);
     } else {
-      path_map[it.first] = Layout::relative_to(".", join_path);
+      path_map[it.first] = Layout::relative_to(".", new_join_path);
     }
-
     // don't copy the prefix, mandir, localstatedir and infodir
     if (it.first != LAYOUT_EXEC_PREFIX && it.first != LAYOUT_LOCALSTATEDIR && it.first != LAYOUT_MANDIR &&
         it.first != LAYOUT_INFODIR) {
-      if (!copy_directory(old_path, new_path, it.first)) {
+      if (!copy_directory(old_path, new_path, it.first, copy_style)) {
         ink_warning("Unable to copy '%s' - %s", it.first.c_str(), strerror(errno));
         ink_notice("Creating '%s': %s", it.first.c_str(), new_path.c_str());
         // if copy failed for certain directory, we create it in runroot
@@ -682,7 +763,7 @@ RunrootEngine::verify_runroot()
     path_map = runroot_map_default();
     std::cout << "Verifying default build ..." << std::endl;
   } else {
-    path_map = runroot_map(path);
+    path_map = runroot_map(Layout::relative_to(path, "runroot_path.yml"));
   }
 
   RunrootMapType permission_map; // contains rwx bits
