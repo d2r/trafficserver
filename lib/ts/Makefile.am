@@ -257,7 +257,6 @@ test_X509HostnameValidator_LDADD = libtsutil.la @LIBTCL@ @LIBPCRE@ @OPENSSL_LIBS
 test_tsutil_LDADD = libtsutil.la @LIBTCL@ @LIBPCRE@
 test_tsutil_SOURCES = \
 	test_PriorityQueue.cc \
-	test_Ptr.cc \
 	tests.cc
 
 test_tslib_CPPFLAGS = $(AM_CPPFLAGS)\
@@ -281,6 +280,7 @@ test_tslib_SOURCES = \
 	unit-tests/test_MemArena.cc \
 	unit-tests/test_MT_hashtable.cc \
 	unit-tests/test_PostScript.cc \
+	unit-tests/test_Ptr.cc \
 	unit-tests/test_Regex.cc \
 	unit-tests/test_Scalar.cc \
 	unit-tests/test_scoped_resource.cc \
