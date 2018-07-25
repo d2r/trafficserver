@@ -120,13 +120,8 @@ TEST_CASE("MemArena helper", "[libts][MemArena]")
     std::string name{"name"};
 
     Thing() {}
-    Thing(int x) : ten(x) {}
-
-    Thing(std::string const &s) : name(s) {}
 
     Thing(int x, std::string_view s) : ten(x), name(s) {}
-
-    Thing(std::string const &s, int x) : ten(x), name(s) {}
   };
 
   ts::MemArena arena{256};
