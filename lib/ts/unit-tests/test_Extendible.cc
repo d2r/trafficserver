@@ -31,7 +31,6 @@ using namespace MT;
 
 // Extendible is abstract and must be derived in a CRTP
 struct Derived : Extendible<Derived> {
-  using super_type = Extendible<Derived>;
   string m_str;
 };
 
@@ -60,8 +59,8 @@ int testField::alive = 0;
 
 TEST_CASE("Extendible", "")
 {
-  typename Derived::super_type::BitFieldId bit_a, bit_b, bit_c;
-  typename Derived::super_type::FieldId<ATOMIC, int> int_a, int_b, int_c;
+  typename Derived::BitFieldId bit_a, bit_b, bit_c;
+  typename Derived::FieldId<ATOMIC, int> int_a, int_b, int_c;
   Derived *ptr;
 
   // test cases:
@@ -254,7 +253,7 @@ TEST_CASE("Extendible", "")
 
   INFO("STATIC")
   {
-    typename Derived::super_type::FieldId<STATIC, int> tf_d;
+    typename Derived::FieldId<STATIC, int> tf_d;
     Derived::schema.addField(tf_d, "tf_d");
     REQUIRE(tf_d.isValid());
     Derived &d         = *(new Derived());
@@ -270,7 +269,7 @@ TEST_CASE("Extendible", "")
 
   INFO("DIRECT")
   {
-    typename Derived::super_type::FieldId<DIRECT, int> tf_e;
+    typename Derived::FieldId<DIRECT, int> tf_e;
     Derived::schema.addField(tf_e, "tf_e");
     REQUIRE(tf_e.isValid());
     Derived &d  = *(new Derived());
