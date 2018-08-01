@@ -1,5 +1,5 @@
 /**
-  @file Extendible
+  @file AcidPtr
 
   @section license License
 

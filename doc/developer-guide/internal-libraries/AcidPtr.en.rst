@@ -20,6 +20,12 @@
 .. highlight:: cpp
 .. default-domain:: cpp
 
+.. |AcidPtr| replace:: :class:`AcidPtr`
+.. |AcidCommitPtr| replace:: :class:`AcidCommitPtr`
+
+
+.. _ACIDPTR:
+
 AcidPtr & AcidCommitPtr
 ***********************
 
@@ -30,21 +36,22 @@ Synopsis
 
    #include "ts/AcidPtr.h"
 
-AcidPtr provides atomic access to a std::shared_ptr. 
-AcidCommitPtr provides exclusive write access to data.
+|AcidPtr| provides atomic access to a std::shared_ptr.
+|AcidCommitPtr| provides exclusive write access to data.
 
 Description
 +++++++++++
 
-Provides transparent interface for "copy on write" and "commit when done" in a familiar unique_ptr style. 
+Provides transparent interface for "copy on write" and "commit when done" in a familiar unique_ptr style.
 
-Named after the desirable properties of a database, ACID_ acronym: 
+Named after the desirable properties of a database, ACID_ acronym:
+
 * Atomic - reads and writes avoid skew, by using mutex locks.
 * Consistent - data can only be changed by a commit, and only one commit can exist at a time per data.
 * Isolated - commits of a single point of data are not concurrent. But commits of seperate data can be conncurrent.
 * Durable - shared_ptr is used to keep older versions of data in memory while references exist.
 
-.. _ACID: https://en.wikipedia.org/wiki/ACID
+.. _ACID: https://en.wikipedia.org/wiki/ACID_(computer_science)
 
 .. uml:
    class AcidPtr<T> {
@@ -66,31 +73,30 @@ Named after the desirable properties of a database, ACID_ acronym:
      -AcidCommmitPtr() = delete
      +AcidCommmitPtr(AcidPtr&)
      +~AcidCommmitPtr()
-     +void abort() 
+     +void abort()
    }
-   
+
    class std::unique_ptr {
-   
+
    }
-   
+
    AcidCommitPtr--|>std::unique_ptr
-   
+
 Performance
 -----------
-Note this code is currently implemented with mutex locks, it is expected to be fast due to the very brief duration of each lock. It would be plausible to change the implementation to use atomics or spin locks. 
+Note this code is currently implemented with mutex locks, it is expected to be fast due to the very brief duration of each lock. It would be plausible to change the implementation to use atomics or spin locks.
 
 
-:class:AcidCommitPtr
+|AcidCommitPtr|
+
 * On construction, duplicate values from a shared_ptr to a unique_ptr. (aka copy read to write memory)
-* On destruction, move value ptr to shared_ptr. (aka move write ptr to read ptr) 
+* On destruction, move value ptr to shared_ptr. (aka move write ptr to read ptr)
 
-The :class:AcidCommitPtr executes this transparent to the writer code. It copies the data on construction, and finalizes on destruction. A MemLock is used to allow exclusive read and write access, however the access is made to as fast as possible.
-
-.. _ACIDPTR:
+The |AcidCommitPtr| executes this transparent to the writer code. It copies the data on construction, and finalizes on destruction. A MemLock is used to allow exclusive read and write access, however the access is made to as fast as possible.
 
 Use Cases
 ---------
-Implemented for use :ref:ACIDPTR interface in :ref:Extendible. But could be used elsewhere without modification.
+Implemented for use |ACIDPTR| interface in :class:`Extendible`. But could be used elsewhere without modification.
 
 .. uml::
    :align: center
@@ -110,7 +116,7 @@ Implemented for use :ref:ACIDPTR interface in :ref:Extendible. But could be used
    Writer --> DataPrime : read/write
    Data .> DataPrime : copy
 
-When the writer is done, ~AcidCommitPtr the data ptr is updated to point at the written copy, so that future read request will use it. Existing reader will continue to use the old data. 
+When the writer is done, :func:`~AcidCommitPtr::~AcidCommitPtr()` is called and its |AcidPtr| is updated to point at the written copy, so that future read requests will use it. Existing reader will continue to use the old data.
 
 .. uml::
    :align: center
@@ -183,12 +189,12 @@ When the writer is done, ~AcidCommitPtr the data ptr is updated to point at the 
    AcidPtr <[#green]- AccessMutex: lock
    activate AccessMutex #green
 
-   Writer -> AcidPtr: ~AcidCommitPtr() 
+   Writer -> AcidPtr: ~AcidCommitPtr()
    deactivate Writer
    AcidPtr -[#green]> Reader: copy const shared_ptr
    activate Reader
    note left
-     Contention limited to duration 
+     Contention limited to duration
      of shared_ptr copy/reset.
      (internally defined)
    end note
@@ -229,7 +235,7 @@ When the writer is done, ~AcidCommitPtr the data ptr is updated to point at the 
      update AcidCommitPtr
    end hnote
    note over Writer_A
-     Contention for duration 
+     Contention for duration
      of AcidCommitPtr scope.
      (externally defined)
    end note
@@ -261,3 +267,20 @@ When the writer is done, ~AcidCommitPtr the data ptr is updated to point at the 
    deactivate AccessMutex
    AcidPtr -[#blue]> WriteMutex: unlock
    deactivate WriteMutex
+
+Reference
++++++++++
+
+
+.. class:: template<typename T> AcidPtr
+
+   .. function:: template<typename T> const std::shared_ptr<const T> getPtr() const
+
+.. class:: template<typename T> AcidCommitPtr
+
+   .. function:: template<> ~AcidCommitPtr()
+
+   .. function:: template<T> AcidCommitPtr<T> startCommit()
+
+   .. function:: template<> void abort()
+
