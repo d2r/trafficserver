@@ -26,7 +26,7 @@ import platform
 import sys
 
 pip_packages = [
-    "autest==1.5.3",
+    "git+https://bitbucket.org/xzhan121/reusable-gold-testing-system.git",
     "hyper",
     "requests",
     "dnslib",
