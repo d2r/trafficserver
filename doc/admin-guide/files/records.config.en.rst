@@ -1380,10 +1380,11 @@ HTTP Redirection
    duplicate keys are present in the setting, the right-most key-value pair is
    used.
 
-   The default value is ``routable:follow``, which means "follow routable
-   redirects, return all other redirects". Note that
-   :ts:cv:`proxy.config.http.number_of_redirections` must be positive also,
-   otherwise redirects will be returned rather than followed.
+   For compatibility reasons, the default value is ``default:follow`` rather
+   than the safer value of ``routable:follow``. The default value means "follow
+   all redirects". Note that :ts:cv:`proxy.config.http.number_of_redirections`
+   must be positive also, otherwise redirects will be returned rather than
+   followed.
 
 Origin Server Connect Attempts
 ==============================
