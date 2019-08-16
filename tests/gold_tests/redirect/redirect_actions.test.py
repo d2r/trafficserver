@@ -33,24 +33,34 @@ dns = Test.MakeDNServer('dns')
 # This record is used in each test case to get the initial redirect response from the origin that we will handle.
 dnsRecords = {'iwillredirect.test': ['127.0.0.1']}
 
-host = socket.gethostname()
-ipv4addrs = set()
-try:
-    ipv4addrs = set([ip for \
-            (family,_,_,_,(ip,*_)) in \
-            socket.getaddrinfo(host,port=None) if \
-            socket.AF_INET == family])
-except socket.gaierror:
-    pass
+# We need a non-loopback IP address for our "self" address class.
+# We cannot trust every system's host name to resolve to a valid IP address.
+# Some systems resolve the host name to a loopback IP address:
+# https://www.debian.org/doc/manuals/debian-reference/ch05.en.html#_the_hostname_resolution
+#
+# In this work-around, we create connections to arbitrary remote IP addresses
+# and inspect the sockets address. We do not need routable remote IP addresses
+# for this to work.
+def get_self_ip(af):
+    try:
+        s = socket.socket(af, socket.SOCK_DGRAM)
+        s.connect(({socket.AF_INET: '10.93.18.83',
+                    socket.AF_INET6:'fc00:c181:18cf::'}[af], 1))
+        return s.getsockname()[0]
+    except:
+        pass
+    finally:
+        s.close()
 
-ipv6addrs = set()
-try:
-    ipv6addrs = set(["[{0}]".format(ip.split('%')[0]) for \
-            (family,_,_,_,(ip,*_)) in \
-            socket.getaddrinfo(host,port=None) if \
-            socket.AF_INET6 == family and 'fe80' != ip[0:4]]) # Skip link-local addresses.
-except socket.gaierror:
-    pass
+ipv4 = get_self_ip(socket.AF_INET)
+ipv6 = get_self_ip(socket.AF_INET6)
+ipaddrs = set()
+if ipv4 and '127' != ipv4[0:3]: # Skip loopback addresses.
+    ipaddrs.add(ipv4)
+if ipv6 and 'fe80' != ipv6[0:4]: # Skip link-local addresses.
+    ipaddrs.add(ipv6)
+if len(ipaddrs) < 1:
+    Test.SkipIf(Condition.true('Could not find a valid IP address to use for self'))
 
 origin = Test.MakeOriginServer('origin', ip='0.0.0.0')
 ArbitraryTimestamp='12345678'
@@ -171,7 +181,7 @@ class AddressE(Enum):
     Multicast = ('224.1.2.3',   '[ff42::]')
     Linklocal = ('169.254.0.1', '[fe80::]')
     Routable  = ('72.30.35.10', '[2001:4998:58:1836::10]') # Do not Follow redirects to these in an automated test.
-    Self      = ipv4addrs | ipv6addrs # Addresses of this host.
+    Self      = ipaddrs # Addresses of this host.
     Default   = None # All addresses apply, nothing in particular to test.
 
 class ActionE(Enum):
@@ -226,7 +236,7 @@ scenarios = [
 
 for scenario in scenarios:
     for addressClass in AddressE:
-        if not addressClass.value:
+        if addressClass.value is None:
             # Default has no particular addresses to test.
             continue
         for address in addressClass.value:
